@@ -1916,11 +1916,10 @@ class RegulatoryEngagementPlan:
         return validation
 ```
 
----
 
-## Monitoring & Observability
+## Comprehensive Monitoring Strategy
 
-### Comprehensive Monitoring Strategy
+### Performance Metrics Framework
 ```python
 import prometheus_client
 from dataclasses import dataclass
@@ -1993,4 +1992,759 @@ class ComplianceSystemMonitoring:
     
     def calculate_system_performance(self, time_window: timedelta = timedelta(hours=24)) -> PerformanceMetrics:
         """
-        Calculate
+        Calculate comprehensive system performance metrics
+        """
+        
+        end_time = datetime.utcnow()
+        start_time = end_time - time_window
+        
+        # Query metrics from database
+        metrics_data = self._query_metrics(start_time, end_time)
+        
+        # Calculate performance indicators
+        total_transactions = len(metrics_data)
+        avg_processing_time = sum(m['processing_time'] for m in metrics_data) / total_transactions
+        
+        # Calculate accuracy based on human feedback
+        accuracy_data = self._get_accuracy_feedback(start_time, end_time)
+        accuracy_rate = sum(a['correct'] for a in accuracy_data) / len(accuracy_data) if accuracy_data else 0.85
+        
+        # Calculate error rate
+        error_count = len([m for m in metrics_data if m.get('error')])
+        error_rate = error_count / total_transactions if total_transactions > 0 else 0
+        
+        # System availability from uptime monitoring
+        availability = self._calculate_uptime(start_time, end_time)
+        
+        # User satisfaction from feedback surveys
+        satisfaction = self._get_user_satisfaction_score(start_time, end_time)
+        
+        return PerformanceMetrics(
+            transaction_throughput=total_transactions / (time_window.total_seconds() / 3600),
+            average_processing_time=avg_processing_time,
+            accuracy_rate=accuracy_rate,
+            error_rate=error_rate,
+            system_availability=availability,
+            user_satisfaction=satisfaction
+        )
+    
+    def generate_sla_report(self) -> dict:
+        """
+        Generate Service Level Agreement compliance report
+        """
+        
+        current_metrics = self.calculate_system_performance()
+        
+        sla_targets = {
+            "availability": 99.9,  # 99.9% uptime
+            "response_time": 2.0,  # <2 seconds average
+            "accuracy": 90.0,      # >90% accuracy
+            "throughput": 1000     # >1000 transactions/hour
+        }
+        
+        sla_compliance = {
+            "availability": {
+                "target": sla_targets["availability"],
+                "actual": current_metrics.system_availability,
+                "compliant": current_metrics.system_availability >= sla_targets["availability"],
+                "breach_time": self._calculate_breach_duration("availability")
+            },
+            "response_time": {
+                "target": sla_targets["response_time"],
+                "actual": current_metrics.average_processing_time,
+                "compliant": current_metrics.average_processing_time <= sla_targets["response_time"],
+                "95th_percentile": self._get_percentile_response_time(95)
+            },
+            "accuracy": {
+                "target": sla_targets["accuracy"],
+                "actual": current_metrics.accuracy_rate * 100,
+                "compliant": current_metrics.accuracy_rate >= (sla_targets["accuracy"] / 100),
+                "trend": self._calculate_accuracy_trend()
+            },
+            "throughput": {
+                "target": sla_targets["throughput"],
+                "actual": current_metrics.transaction_throughput,
+                "compliant": current_metrics.transaction_throughput >= sla_targets["throughput"],
+                "peak_capacity": self._get_peak_throughput()
+            }
+        }
+        
+        return {
+            "report_timestamp": datetime.utcnow(),
+            "overall_compliance": all(sla["compliant"] for sla in sla_compliance.values()),
+            "sla_metrics": sla_compliance,
+            "recommendations": self._generate_sla_recommendations(sla_compliance)
+        }
+```
+
+---
+
+## Real-Time Performance Monitoring
+
+### Infrastructure Monitoring
+```python
+import psutil
+import docker
+from kubernetes import client, config
+
+class InfrastructureMonitor:
+    """
+    Real-time infrastructure and resource monitoring
+    """
+    
+    def __init__(self):
+        # Kubernetes client for container monitoring
+        try:
+            config.load_incluster_config()  # For in-cluster deployment
+        except:
+            config.load_kube_config()  # For local development
+        
+        self.k8s_apps_v1 = client.AppsV1Api()
+        self.k8s_core_v1 = client.CoreV1Api()
+        
+        # Docker client for container metrics
+        self.docker_client = docker.from_env()
+    
+    def monitor_system_resources(self) -> dict:
+        """
+        Monitor system-level resource utilization
+        """
+        
+        # CPU utilization
+        cpu_percent = psutil.cpu_percent(interval=1, percpu=True)
+        
+        # Memory utilization
+        memory = psutil.virtual_memory()
+        
+        # Disk utilization
+        disk = psutil.disk_usage('/')
+        
+        # Network statistics
+        network = psutil.net_io_counters()
+        
+        return {
+            "cpu": {
+                "overall_percent": sum(cpu_percent) / len(cpu_percent),
+                "per_core": cpu_percent,
+                "load_average": psutil.getloadavg()
+            },
+            "memory": {
+                "total_gb": memory.total / (1024**3),
+                "used_gb": memory.used / (1024**3),
+                "available_gb": memory.available / (1024**3),
+                "percent_used": memory.percent
+            },
+            "disk": {
+                "total_gb": disk.total / (1024**3),
+                "used_gb": disk.used / (1024**3),
+                "free_gb": disk.free / (1024**3),
+                "percent_used": (disk.used / disk.total) * 100
+            },
+            "network": {
+                "bytes_sent": network.bytes_sent,
+                "bytes_received": network.bytes_recv,
+                "packets_sent": network.packets_sent,
+                "packets_received": network.packets_recv
+            }
+        }
+    
+    def monitor_kubernetes_pods(self) -> dict:
+        """
+        Monitor Kubernetes pod health and resource usage
+        """
+        
+        namespace = "banking-compliance"
+        pods = self.k8s_core_v1.list_namespaced_pod(namespace=namespace)
+        
+        pod_metrics = []
+        
+        for pod in pods.items:
+            pod_info = {
+                "name": pod.metadata.name,
+                "status": pod.status.phase,
+                "restart_count": sum(container.restart_count for container in pod.status.container_statuses or []),
+                "ready": all(container.ready for container in pod.status.container_statuses or []),
+                "node": pod.spec.node_name,
+                "created": pod.metadata.creation_timestamp
+            }
+            
+            # Get resource usage if metrics server is available
+            try:
+                pod_metrics_data = self._get_pod_metrics(pod.metadata.name, namespace)
+                pod_info.update(pod_metrics_data)
+            except:
+                pass  # Metrics server not available
+            
+            pod_metrics.append(pod_info)
+        
+        return {
+            "total_pods": len(pod_metrics),
+            "running_pods": len([p for p in pod_metrics if p["status"] == "Running"]),
+            "failed_pods": len([p for p in pod_metrics if p["status"] == "Failed"]),
+            "pods": pod_metrics
+        }
+    
+    def monitor_database_performance(self) -> dict:
+        """
+        Monitor database performance metrics
+        """
+        
+        # This would integrate with your specific database monitoring
+        # PostgreSQL example:
+        db_metrics = {
+            "connections": {
+                "active": self._get_db_metric("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"),
+                "idle": self._get_db_metric("SELECT count(*) FROM pg_stat_activity WHERE state = 'idle'"),
+                "max_connections": self._get_db_metric("SHOW max_connections")
+            },
+            "performance": {
+                "queries_per_second": self._calculate_qps(),
+                "average_query_time": self._get_avg_query_time(),
+                "slow_queries": self._count_slow_queries(),
+                "cache_hit_ratio": self._get_cache_hit_ratio()
+            },
+            "storage": {
+                "database_size_gb": self._get_database_size(),
+                "table_sizes": self._get_table_sizes(),
+                "index_usage": self._get_index_usage_stats()
+            }
+        }
+        
+        return db_metrics
+    
+    def generate_infrastructure_health_score(self) -> float:
+        """
+        Generate overall infrastructure health score (0-100)
+        """
+        
+        system_resources = self.monitor_system_resources()
+        pod_status = self.monitor_kubernetes_pods()
+        db_performance = self.monitor_database_performance()
+        
+        # Scoring criteria
+        scores = []
+        
+        # CPU score (lower is better, penalty for >80%)
+        cpu_score = max(0, 100 - (system_resources["cpu"]["overall_percent"] - 50) * 2)
+        scores.append(cpu_score)
+        
+        # Memory score (penalty for >85%)
+        memory_score = max(0, 100 - (system_resources["memory"]["percent_used"] - 70) * 3)
+        scores.append(memory_score)
+        
+        # Pod health score
+        pod_health = (pod_status["running_pods"] / pod_status["total_pods"]) * 100 if pod_status["total_pods"] > 0 else 100
+        scores.append(pod_health)
+        
+        # Database performance score
+        db_score = self._calculate_db_health_score(db_performance)
+        scores.append(db_score)
+        
+        return sum(scores) / len(scores)
+```
+
+### Application Performance Monitoring
+```python
+import time
+import functools
+from contextlib import contextmanager
+import structlog
+
+class ApplicationPerformanceMonitor:
+    """
+    Application-level performance monitoring and tracing
+    """
+    
+    def __init__(self):
+        self.logger = structlog.get_logger("application_performance")
+        self.performance_data = {}
+    
+    @contextmanager
+    def trace_operation(self, operation_name: str, **context):
+        """
+        Context manager for tracing operation performance
+        """
+        start_time = time.time()
+        operation_id = f"{operation_name}_{int(start_time * 1000)}"
+        
+        self.logger.info(
+            f"Starting operation: {operation_name}",
+            operation_id=operation_id,
+            **context
+        )
+        
+        try:
+            yield operation_id
+            
+            # Success case
+            duration = time.time() - start_time
+            self._record_operation_success(operation_name, duration, context)
+            
+            self.logger.info(
+                f"Completed operation: {operation_name}",
+                operation_id=operation_id,
+                duration_seconds=duration,
+                **context
+            )
+            
+        except Exception as e:
+            # Error case
+            duration = time.time() - start_time
+            self._record_operation_error(operation_name, duration, str(e), context)
+            
+            self.logger.error(
+                f"Failed operation: {operation_name}",
+                operation_id=operation_id,
+                duration_seconds=duration,
+                error=str(e),
+                **context
+            )
+            raise
+    
+    def performance_decorator(self, operation_name: str = None):
+        """
+        Decorator for automatic function performance monitoring
+        """
+        def decorator(func):
+            name = operation_name or f"{func.__module__}.{func.__name__}"
+            
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                with self.trace_operation(name):
+                    return func(*args, **kwargs)
+            return wrapper
+        return decorator
+    
+    def _record_operation_success(self, operation_name: str, duration: float, context: dict):
+        """
+        Record successful operation metrics
+        """
+        if operation_name not in self.performance_data:
+            self.performance_data[operation_name] = {
+                "success_count": 0,
+                "error_count": 0,
+                "total_duration": 0,
+                "min_duration": float('inf'),
+                "max_duration": 0,
+                "durations": []
+            }
+        
+        data = self.performance_data[operation_name]
+        data["success_count"] += 1
+        data["total_duration"] += duration
+        data["min_duration"] = min(data["min_duration"], duration)
+        data["max_duration"] = max(data["max_duration"], duration)
+        data["durations"].append(duration)
+        
+        # Keep only last 1000 measurements to prevent memory issues
+        if len(data["durations"]) > 1000:
+            data["durations"] = data["durations"][-1000:]
+    
+    def _record_operation_error(self, operation_name: str, duration: float, error: str, context: dict):
+        """
+        Record failed operation metrics
+        """
+        if operation_name not in self.performance_data:
+            self.performance_data[operation_name] = {
+                "success_count": 0,
+                "error_count": 0,
+                "total_duration": 0,
+                "min_duration": float('inf'),
+                "max_duration": 0,
+                "durations": [],
+                "errors": {}
+            }
+        
+        data = self.performance_data[operation_name]
+        data["error_count"] += 1
+        
+        if "errors" not in data:
+            data["errors"] = {}
+        
+        if error not in data["errors"]:
+            data["errors"][error] = 0
+        data["errors"][error] += 1
+    
+    def get_performance_summary(self, operation_name: str = None) -> dict:
+        """
+        Get performance summary for specific operation or all operations
+        """
+        if operation_name:
+            if operation_name not in self.performance_data:
+                return {"error": f"No data for operation: {operation_name}"}
+            
+            return self._calculate_operation_stats(operation_name, self.performance_data[operation_name])
+        
+        # Return summary for all operations
+        summary = {}
+        for op_name, op_data in self.performance_data.items():
+            summary[op_name] = self._calculate_operation_stats(op_name, op_data)
+        
+        return summary
+    
+    def _calculate_operation_stats(self, operation_name: str, data: dict) -> dict:
+        """
+        Calculate statistical summary for operation performance
+        """
+        total_calls = data["success_count"] + data["error_count"]
+        
+        if total_calls == 0:
+            return {"operation": operation_name, "status": "no_data"}
+        
+        durations = data["durations"]
+        avg_duration = data["total_duration"] / data["success_count"] if data["success_count"] > 0 else 0
+        
+        # Calculate percentiles
+        if durations:
+            sorted_durations = sorted(durations)
+            p50 = sorted_durations[int(len(sorted_durations) * 0.5)]
+            p95 = sorted_durations[int(len(sorted_durations) * 0.95)]
+            p99 = sorted_durations[int(len(sorted_durations) * 0.99)]
+        else:
+            p50 = p95 = p99 = 0
+        
+        return {
+            "operation": operation_name,
+            "total_calls": total_calls,
+            "success_rate": (data["success_count"] / total_calls) * 100,
+            "error_rate": (data["error_count"] / total_calls) * 100,
+            "performance": {
+                "average_duration": avg_duration,
+                "min_duration": data["min_duration"] if data["min_duration"] != float('inf') else 0,
+                "max_duration": data["max_duration"],
+                "p50_duration": p50,
+                "p95_duration": p95,
+                "p99_duration": p99
+            },
+            "errors": data.get("errors", {})
+        }
+
+# Example usage in compliance system
+class MonitoredComplianceEngine:
+    """
+    Compliance engine with integrated performance monitoring
+    """
+    
+    def __init__(self):
+        self.monitor = ApplicationPerformanceMonitor()
+        self.compliance_engine = BankingComplianceSystem()
+    
+    @ApplicationPerformanceMonitor().performance_decorator("transaction_analysis")
+    def analyze_transaction(self, transaction_id: str) -> ComplianceResult:
+        """
+        Monitored transaction analysis with automatic performance tracking
+        """
+        
+        with self.monitor.trace_operation("data_retrieval", transaction_id=transaction_id):
+            transaction_data = self.compliance_engine.get_transaction_data(transaction_id)
+        
+        with self.monitor.trace_operation("ai_analysis", transaction_id=transaction_id):
+            result = self.compliance_engine.analyze_transaction(transaction_id)
+        
+        with self.monitor.trace_operation("result_storage", transaction_id=transaction_id):
+            self._store_compliance_result(result)
+        
+        return result
+```
+
+---
+
+## AI/ML Model Monitoring
+
+### Model Performance Tracking
+```python
+import numpy as np
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from scipy import stats
+import json
+from datetime import datetime, timedelta
+
+class MLModelMonitor:
+    """
+    Comprehensive ML model monitoring and drift detection
+    """
+    
+    def __init__(self):
+        self.baseline_metrics = {}
+        self.performance_history = []
+        self.drift_threshold = 0.05  # 5% performance degradation threshold
+    
+    def track_model_prediction(self, model_name: str, inputs: dict, prediction: dict, ground_truth: dict = None):
+        """
+        Track individual model prediction for monitoring
+        """
+        
+        prediction_record = {
+            "timestamp": datetime.utcnow(),
+            "model_name": model_name,
+            "inputs": inputs,
+            "prediction": prediction,
+            "ground_truth": ground_truth,
+            "confidence": prediction.get("confidence_score", 0)
+        }
+        
+        # Store prediction for batch analysis
+        self._store_prediction_record(prediction_record)
+        
+        # Real-time drift detection
+        if ground_truth:
+            self._check_real_time_performance(model_name, prediction, ground_truth)
+    
+    def calculate_model_performance(self, model_name: str, time_window: timedelta = timedelta(days=7)) -> dict:
+        """
+        Calculate comprehensive model performance metrics
+        """
+        
+        end_time = datetime.utcnow()
+        start_time = end_time - time_window
+        
+        # Retrieve predictions with ground truth
+        predictions = self._get_predictions_with_truth(model_name, start_time, end_time)
+        
+        if not predictions:
+            return {"error": "No predictions with ground truth found"}
+        
+        # Extract predictions and ground truth
+        y_pred = [p["prediction"]["requires_review"] for p in predictions]
+        y_true = [p["ground_truth"]["requires_review"] for p in predictions]
+        
+        # Calculate classification metrics
+        accuracy = accuracy_score(y_true, y_pred)
+        precision = precision_score(y_true, y_pred, average='weighted')
+        recall = recall_score(y_true, y_pred, average='weighted')
+        f1 = f1_score(y_true, y_pred, average='weighted')
+        
+        # Calculate confidence metrics
+        confidences = [p["confidence"] for p in predictions]
+        avg_confidence = np.mean(confidences)
+        confidence_std = np.std(confidences)
+        
+        # Risk level distribution
+        risk_predictions = [p["prediction"]["risk_level"] for p in predictions]
+        risk_distribution = {
+            "HIGH": risk_predictions.count("HIGH") / len(risk_predictions),
+            "MEDIUM": risk_predictions.count("MEDIUM") / len(risk_predictions),
+            "LOW": risk_predictions.count("LOW") / len(risk_predictions)
+        }
+        
+        performance_metrics = {
+            "model_name": model_name,
+            "evaluation_period": {
+                "start": start_time.isoformat(),
+                "end": end_time.isoformat(),
+                "days": time_window.days
+            },
+            "sample_size": len(predictions),
+            "classification_metrics": {
+                "accuracy": accuracy,
+                "precision": precision,
+                "recall": recall,
+                "f1_score": f1
+            },
+            "confidence_metrics": {
+                "average_confidence": avg_confidence,
+                "confidence_std": confidence_std,
+                "low_confidence_rate": len([c for c in confidences if c < 0.7]) / len(confidences)
+            },
+            "prediction_distribution": risk_distribution,
+            "performance_trend": self._calculate_performance_trend(model_name, time_window)
+        }
+        
+        # Store performance metrics for trending
+        self.performance_history.append({
+            "timestamp": end_time,
+            "model_name": model_name,
+            "metrics": performance_metrics
+        })
+        
+        return performance_metrics
+    
+    def detect_model_drift(self, model_name: str) -> dict:
+        """
+        Detect various types of model drift
+        """
+        
+        current_period = timedelta(days=7)
+        baseline_period = timedelta(days=30)
+        
+        # Get current and baseline performance
+        current_metrics = self.calculate_model_performance(model_name, current_period)
+        baseline_metrics = self._get_baseline_metrics(model_name, baseline_period)
+        
+        if not baseline_metrics:
+            return {"warning": "Insufficient baseline data for drift detection"}
+        
+        drift_analysis = {
+            "model_name": model_name,
+            "detection_timestamp": datetime.utcnow(),
+            "drift_types": {}
+        }
+        
+        # Performance drift
+        accuracy_drift = abs(current_metrics["classification_metrics"]["accuracy"] - 
+                            baseline_metrics["classification_metrics"]["accuracy"])
+        
+        if accuracy_drift > self.drift_threshold:
+            drift_analysis["drift_types"]["performance_drift"] = {
+                "detected": True,
+                "severity": "HIGH" if accuracy_drift > 0.1 else "MEDIUM",
+                "current_accuracy": current_metrics["classification_metrics"]["accuracy"],
+                "baseline_accuracy": baseline_metrics["classification_metrics"]["accuracy"],
+                "drift_magnitude": accuracy_drift
+            }
+        
+        # Distribution drift (risk level predictions)
+        current_dist = current_metrics["prediction_distribution"]
+        baseline_dist = baseline_metrics["prediction_distribution"]
+        
+        # Calculate KL divergence for distribution comparison
+        kl_divergence = self._calculate_kl_divergence(current_dist, baseline_dist)
+        
+        if kl_divergence > 0.1:  # Threshold for significant distribution change
+            drift_analysis["drift_types"]["distribution_drift"] = {
+                "detected": True,
+                "severity": "HIGH" if kl_divergence > 0.2 else "MEDIUM",
+                "kl_divergence": kl_divergence,
+                "current_distribution": current_dist,
+                "baseline_distribution": baseline_dist
+            }
+        
+        # Confidence drift
+        confidence_drift = abs(current_metrics["confidence_metrics"]["average_confidence"] - 
+                              baseline_metrics["confidence_metrics"]["average_confidence"])
+        
+        if confidence_drift > 0.1:
+            drift_analysis["drift_types"]["confidence_drift"] = {
+                "detected": True,
+                "current_confidence": current_metrics["confidence_metrics"]["average_confidence"],
+                "baseline_confidence": baseline_metrics["confidence_metrics"]["average_confidence"],
+                "drift_magnitude": confidence_drift
+            }
+        
+        # Overall drift assessment
+        drift_analysis["overall_assessment"] = {
+            "drift_detected": len(drift_analysis["drift_types"]) > 0,
+            "severity": self._calculate_overall_drift_severity(drift_analysis["drift_types"]),
+            "recommended_actions": self._generate_drift_recommendations(drift_analysis["drift_types"])
+        }
+        
+        return drift_analysis
+    
+    def _calculate_kl_divergence(self, dist1: dict, dist2: dict) -> float:
+        """
+        Calculate KL divergence between two probability distributions
+        """
+        
+        # Ensure same keys and add small epsilon to avoid log(0)
+        epsilon = 1e-8
+        keys = set(dist1.keys()) | set(dist2.keys())
+        
+        p = np.array([dist1.get(k, epsilon) + epsilon for k in keys])
+        q = np.array([dist2.get(k, epsilon) + epsilon for k in keys])
+        
+        # Normalize to ensure they sum to 1
+        p = p / np.sum(p)
+        q = q / np.sum(q)
+        
+        return np.sum(p * np.log(p / q))
+    
+    def generate_model_health_report(self, model_name: str) -> dict:
+        """
+        Generate comprehensive model health report
+        """
+        
+        # Get recent performance metrics
+        performance = self.calculate_model_performance(model_name)
+        
+        # Check for drift
+        drift_analysis = self.detect_model_drift(model_name)
+        
+        # Calculate health score (0-100)
+        health_score = self._calculate_model_health_score(performance, drift_analysis)
+        
+        # Get usage statistics
+        usage_stats = self._get_model_usage_stats(model_name)
+        
+        health_report = {
+            "model_name": model_name,
+            "report_timestamp": datetime.utcnow(),
+            "health_score": health_score,
+            "status": self._determine_model_status(health_score),
+            "performance_summary": {
+                "accuracy": performance["classification_metrics"]["accuracy"],
+                "confidence": performance["confidence_metrics"]["average_confidence"],
+                "predictions_analyzed": performance["sample_size"]
+            },
+            "drift_assessment": drift_analysis,
+            "usage_statistics": usage_stats,
+            "recommendations": self._generate_model_recommendations(health_score, drift_analysis, performance),
+            "next_review_date": (datetime.utcnow() + timedelta(days=7)).isoformat()
+        }
+        
+        return health_report
+    
+    def _calculate_model_health_score(self, performance: dict, drift_analysis: dict) -> float:
+        """
+        Calculate overall model health score (0-100)
+        """
+        
+        base_score = 100
+        
+        # Deduct points for poor performance
+        accuracy = performance["classification_metrics"]["accuracy"]
+        if accuracy < 0.9:
+            base_score -= (0.9 - accuracy) * 200  # Heavy penalty for low accuracy
+        
+        # Deduct points for low confidence
+        avg_confidence = performance["confidence_metrics"]["average_confidence"]
+        if avg_confidence < 0.8:
+            base_score -= (0.8 - avg_confidence) * 100
+        
+        # Deduct points for drift
+        if drift_analysis["overall_assessment"]["drift_detected"]:
+            severity = drift_analysis["overall_assessment"]["severity"]
+            penalties = {"HIGH": 30, "MEDIUM": 15, "LOW": 5}
+            base_score -= penalties.get(severity, 0)
+        
+        # Deduct points for high low-confidence predictions
+        low_confidence_rate = performance["confidence_metrics"]["low_confidence_rate"]
+        if low_confidence_rate > 0.2:
+            base_score -= low_confidence_rate * 50
+        
+        return max(0, min(100, base_score))
+```
+
+---
+
+## Business Intelligence Dashboard
+
+### Executive Dashboard Metrics
+```python
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+import pandas as pd
+
+class BusinessIntelligenceDashboard:
+    """
+    Executive and operational dashboards for compliance system
+    """
+    
+    def __init__(self):
+        self.compliance_db = ComplianceDatabase()
+        self.performance_monitor = ComplianceSystemMonitoring()
+    
+    def generate_executive_summary(self) -> dict:
+        """
+        Generate high-level executive summary metrics
+        """
+        
+        # Get metrics for last 30 days
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=30)
+        
+        # Transaction volume metrics
+        transaction_metrics = self._get_transaction_volume_metrics(start_date, end_date)
+        
+        # Compliance metrics
+        compliance_metrics = self._get_compliance_efficiency_metrics(start_date, end_
