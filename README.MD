@@ -44,7 +44,8 @@ Install required tools:
 # macOS with Homebrew
 brew install docker minikube kubectl
 
-# Start Docker Desktop and enable Kubernetes (alternative to minikube)
+# Windows: Download Docker Desktop and minikube from official websites
+# Linux: Install docker, minikube, and kubectl via package manager
 ```
 
 ### Environment Setup
@@ -54,7 +55,8 @@ brew install docker minikube kubectl
 git clone [your-repo]
 cd compliance-agent
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # Linux/macOS
+# .venv\Scripts\activate   # Windows
 ```
 
 2. **Install Python dependencies:**
@@ -67,9 +69,11 @@ pip install -r requirements.txt
 export OPENAI_API_KEY="your-openai-api-key"
 ```
 
-### Local Development (Docker Compose)
+### Deployment Methods
 
-For quick local development without Kubernetes:
+#### Method 1: Local Development (FastAPI Only)
+
+For quick development and testing:
 
 ```bash
 # Start Qdrant vector database
@@ -81,39 +85,251 @@ python fastapi_react_rag_system.py
 
 Access at: http://localhost:8000/docs
 
-### Kubernetes Deployment
+#### Method 2: Docker Containerization
 
-#### Option 1: Using Minikube
+For consistent environment across systems:
 
 ```bash
-# Start minikube cluster
+# Build container image
+docker build -t compliance-api:latest .
+
+# Run with Docker
+docker run -p 8000:8000 \
+  -e OPENAI_API_KEY="your-api-key" \
+  -e QDRANT_URL="http://qdrant:6333" \
+  --link qdrant \
+  compliance-api:latest
+```
+
+#### Method 3: Kubernetes Deployment (Recommended)
+
+For production-like environment with high availability:
+
+**Step 1: Start Kubernetes Cluster**
+```bash
+# Option A: Minikube
 minikube start
 
-# Build and load application image
-docker build -t compliance-api:latest .
-minikube image load compliance-api:latest
+# Option B: Docker Desktop Kubernetes
+# Enable Kubernetes in Docker Desktop Settings → Kubernetes → Enable Kubernetes
+```
 
-# Create OpenAI API key secret
+**Step 2: Prepare Application**
+```bash
+# Ensure Docker is running
+docker ps
+
+# Build and load container image
+docker build -t compliance-api:latest .
+
+# For minikube only (skip if using Docker Desktop)
+minikube image load compliance-api:latest
+```
+
+**Step 3: Create Configuration**
+Create `k8s-manifests.yaml` with proper structure:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: banking-compliance
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant
+  namespace: banking-compliance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:latest
+        ports:
+        - containerPort: 6333
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+      volumes:
+      - name: qdrant-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-service
+  namespace: banking-compliance
+spec:
+  selector:
+    app: qdrant
+  ports:
+  - port: 6333
+    targetPort: 6333
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compliance-api
+  namespace: banking-compliance
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: compliance-api
+  template:
+    metadata:
+      labels:
+        app: compliance-api
+    spec:
+      containers:
+      - name: api
+        image: compliance-api:latest
+        imagePullPolicy: Never  # Use local image for minikube
+        ports:
+        - containerPort: 8000
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-secrets
+              key: openai-api-key
+        - name: QDRANT_URL
+          value: "http://qdrant-service:6333"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: compliance-api-service
+  namespace: banking-compliance
+spec:
+  selector:
+    app: compliance-api
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: LoadBalancer
+```
+
+**Step 4: Deploy Application**
+```bash
+# Create secret for OpenAI API key
 kubectl create secret generic api-secrets \
-  --from-literal=openai-api-key="$OPENAI_API_KEY" \
+  --from-literal=openai-api-key="your-openai-api-key" \
   -n banking-compliance
 
 # Deploy all services
-kubectl apply -f k8s/
+kubectl apply -f k8s-manifests.yaml
 
-# Wait for deployment
-kubectl wait --for=condition=ready pod -l app=compliance-api -n banking-compliance --timeout=300s
+# Wait for deployment to complete
+kubectl get pods -n banking-compliance --watch
 
 # Access application
 kubectl port-forward service/compliance-api-service 8080:8000 -n banking-compliance
 ```
 
-#### Option 2: Using Docker Desktop Kubernetes
+Access at: http://localhost:8080/docs
 
+## System Management
+
+### Starting the System
+
+**Full startup sequence:**
 ```bash
-# Enable Kubernetes in Docker Desktop Settings
-# Then deploy directly
-kubectl apply -f k8s/
+# 1. Start Docker
+# macOS/Windows: Launch Docker Desktop application
+# Linux: sudo systemctl start docker
+
+# 2. Verify Docker is running
+docker ps
+
+# 3. Start Kubernetes cluster
+minikube start  # or ensure Docker Desktop Kubernetes is enabled
+
+# 4. Deploy application
+kubectl apply -f k8s-manifests.yaml
+
+# 5. Check deployment status
+kubectl get pods -n banking-compliance
+
+# 6. Access application (when all pods are Running)
+kubectl port-forward service/compliance-api-service 8080:8000 -n banking-compliance
+```
+
+### Stopping the System
+
+**Graceful shutdown:**
+```bash
+# Stop port forwarding (Ctrl+C in terminal)
+
+# Stop application pods (keeps configuration)
+kubectl scale deployment compliance-api --replicas=0 -n banking-compliance
+kubectl scale deployment qdrant --replicas=0 -n banking-compliance
+
+# Stop minikube cluster (preserves all configurations)
+minikube stop
+
+# Stop Docker Desktop (optional)
+# macOS/Windows: Quit Docker Desktop application
+# Linux: sudo systemctl stop docker
+```
+
+**Complete cleanup (removes everything):**
+```bash
+# Delete all application resources
+kubectl delete namespace banking-compliance
+
+# Stop and delete minikube cluster
+minikube delete
+
+# Remove Docker images (optional)
+docker rmi compliance-api:latest
+docker rmi qdrant/qdrant:latest
+```
+
+### Restarting the System
+
+**Resume after stopping:**
+```bash
+# 1. Start Docker (if stopped)
+# Launch Docker Desktop or: sudo systemctl start docker
+
+# 2. Start minikube
+minikube start
+
+# 3. Restore application (configurations still exist)
+kubectl apply -f k8s-manifests.yaml
+
+# 4. Wait for pods to be ready
+kubectl get pods -n banking-compliance
+
+# 5. Access application
 kubectl port-forward service/compliance-api-service 8080:8000 -n banking-compliance
 ```
 
@@ -268,34 +484,63 @@ if amount > 1000000:  # $1M threshold
 
 ## Troubleshooting
 
-### Common Issues
+### Common Deployment Issues
 
-**API not starting:**
+**Docker not running:**
 ```bash
-# Check if OpenAI API key is set
-echo $OPENAI_API_KEY
+# Symptoms: "Cannot connect to the Docker daemon"
+# Solution: Start Docker Desktop or run: sudo systemctl start docker
+docker ps  # Should show containers or empty list, not error
+```
 
-# Verify Qdrant is running
+**Image pull errors in Kubernetes:**
+```bash
+# Symptoms: ErrImagePull or ImagePullBackOff
+# Solution: Add imagePullPolicy: Never for local images
+# Check that image exists: minikube image ls | grep compliance-api
+# Rebuild if needed: docker build -t compliance-api:latest .
+# Reload: minikube image load compliance-api:latest
+```
+
+**Pod crash loops:**
+```bash
+# Symptoms: CrashLoopBackOff status
+# Diagnosis: kubectl logs deployment/compliance-api -n banking-compliance
+# Common causes:
+# - Missing environment variables (check secret creation)
+# - Incorrect YAML indentation
+# - Application startup errors
+
+# Fix environment variables:
+kubectl describe secret api-secrets -n banking-compliance
+kubectl delete secret api-secrets -n banking-compliance
+kubectl create secret generic api-secrets --from-literal=openai-api-key="your-key" -n banking-compliance
+```
+
+**Service not accessible:**
+```bash
+# Check pod status
 kubectl get pods -n banking-compliance
+
+# Check service configuration
+kubectl get services -n banking-compliance
+
+# Verify port forwarding
+kubectl port-forward service/compliance-api-service 8080:8000 -n banking-compliance
 ```
 
-**Document search not working:**
+**Minikube issues:**
 ```bash
-# Check Qdrant service connectivity
-kubectl port-forward service/qdrant-service 6333:6333 -n banking-compliance
-curl http://localhost:6333/collections
+# Minikube won't start
+minikube delete  # Nuclear option
+minikube start
+
+# Context problems
+kubectl config current-context
+kubectl config use-context minikube
 ```
 
-**Pod crashes or restarts:**
-```bash
-# Check pod logs
-kubectl logs deployment/compliance-api -n banking-compliance
-
-# Check resource limits
-kubectl describe pod -l app=compliance-api -n banking-compliance
-```
-
-### Performance Tuning
+### Performance Issues
 
 **Scaling API pods:**
 ```bash
@@ -303,22 +548,61 @@ kubectl scale deployment compliance-api --replicas=3 -n banking-compliance
 ```
 
 **Increasing resource limits:**
+Edit k8s-manifests.yaml and increase resources:
 ```yaml
-# In api-deployment.yaml
 resources:
   limits:
     memory: "1Gi"
     cpu: "1000m"
 ```
 
-## Next Steps
+**Check resource usage:**
+```bash
+kubectl top pods -n banking-compliance
+kubectl top nodes
+```
 
-This system demonstrates the core concepts for AI-powered banking compliance but requires significant enhancements for production use:
+## Further Improvements
 
-1. **Database Migration**: Replace SQLite with enterprise database
-2. **Security Implementation**: Add authentication and encryption
-3. **Real Data Integration**: Connect to actual banking systems and regulatory feeds
-4. **UI Development**: Build compliance officer interfaces
-5. **Regulatory Certification**: Ensure compliance with banking examination requirements
+### Production Readiness Enhancements
 
-The current implementation provides a solid foundation for understanding how ReAct agents can systematically analyze complex compliance scenarios using real-time document retrieval and explainable decision making.
+**Database Migration:**
+- Replace SQLite with PostgreSQL for concurrent access
+- Implement connection pooling and transaction management
+- Add backup and disaster recovery procedures
+- Enable data replication across multiple zones
+
+**Security Hardening:**
+- Implement OAuth 2.0/SAML integration with enterprise identity providers
+- Add TLS encryption for all service communication
+- Enable pod security policies and network segmentation
+- Implement comprehensive audit logging and monitoring
+
+**Operational Excellence:**
+- Add Prometheus metrics collection and Grafana dashboards
+- Implement centralized logging with ELK stack
+- Create automated testing and deployment pipelines
+- Establish monitoring alerts for system health and SLA breaches
+
+**Integration Capabilities:**
+- Connect to real banking systems and core processing platforms
+- Integrate with live OFAC, SWIFT, and regulatory data feeds
+- Build APIs for compliance case management systems
+- Add webhook support for real-time transaction monitoring
+
+**Advanced Features:**
+- Implement model versioning and A/B testing capabilities
+- Add machine learning model retraining pipelines
+- Create custom risk scoring algorithms based on historical data
+- Develop real-time dashboard for compliance officers
+
+### Suggested Next Steps
+
+1. **Enterprise Database**: Migrate to PostgreSQL with proper schema design
+2. **Authentication System**: Implement enterprise-grade authentication and authorization
+3. **Real Data Sources**: Connect to actual banking transaction feeds and regulatory APIs  
+4. **Compliance UI**: Build dedicated interfaces for compliance officers and analysts
+5. **Advanced Analytics**: Add trending analysis, anomaly detection, and predictive compliance features
+6. **Regulatory Certification**: Ensure compliance with banking examination requirements and audit standards
+
+This system provides a solid foundation for AI-powered banking compliance but requires these enhancements for production deployment in regulated financial institutions.
