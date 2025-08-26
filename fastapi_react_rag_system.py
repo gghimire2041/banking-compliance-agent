@@ -43,7 +43,7 @@ if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY environment variable is required")
 
 # Configure LlamaIndex
-Settings.llm = OpenAI(model="gpt-4", api_key=OPENAI_API_KEY)
+Settings.llm = OpenAI(model="gpt-5-mini", api_key=OPENAI_API_KEY)
 Settings.embed_model = OpenAIEmbedding(api_key=OPENAI_API_KEY)
 
 class ActionType(Enum):
@@ -491,7 +491,7 @@ class AsyncReActBankingAgent:
     
     def setup_database(self):
         """Initialize SQLite database"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -547,7 +547,7 @@ class AsyncReActBankingAgent:
     
     async def get_transaction_data(self, transaction_id: str) -> Optional[Dict]:
         """Retrieve transaction and customer data"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
         
         query = """
             SELECT t.*, c.name, c.customer_type, c.risk_rating, c.kyc_status, c.is_pep
@@ -641,7 +641,7 @@ class AsyncReActBankingAgent:
     
     async def _get_customer_data(self, customer_id: str) -> Dict:
         """Get customer information"""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
         query = "SELECT * FROM customers WHERE customer_id = ?"
         result = await asyncio.to_thread(conn.execute, query, (customer_id,))
         row = result.fetchone()
